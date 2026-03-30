@@ -32,7 +32,10 @@ import {
   Link as LinkIcon,
   Library,
   Music,
-  Film
+  Film,
+  Layout,
+  Monitor,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db, googleProvider, facebookProvider, handleFirestoreError, OperationType } from './firebase';
@@ -173,7 +176,16 @@ function AppContent() {
   });
   const [activeDestination, setActiveDestination] = useState<'youtube' | 'facebook' | 'custom' | null>(null);
   const [showStreamSettings, setShowStreamSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'destinations' | 'overlays' | 'server' | 'media'>('destinations');
+  const [settingsTab, setSettingsTab] = useState<'destinations' | 'overlays' | 'server' | 'media' | 'streaming'>('destinations');
+  const [streamingSettings, setStreamingSettings] = useState({
+    bitrate: '4500',
+    resolution: '1080p',
+    fps: '60',
+    encoder: 'H.264 (Hardware)',
+    latency: 'low',
+    title: 'My Awesome Livestream',
+    description: 'Welcome to my stream! Feel free to chat and enjoy.'
+  });
   const [overlaySettings, setOverlaySettings] = useState({
     borderColor: '#06b6d4',
     borderWidth: 2,
@@ -663,6 +675,12 @@ function AppContent() {
                 >
                   MEDIA
                 </button>
+                <button 
+                  onClick={() => setSettingsTab('streaming')}
+                  className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${settingsTab === 'streaming' ? 'border-cyan-500 text-cyan-500 bg-cyan-500/5' : 'border-transparent text-gray-400 hover:text-white'}`}
+                >
+                  STREAMING
+                </button>
               </div>
 
               <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
@@ -732,43 +750,20 @@ function AppContent() {
                       </div>
                     </div>
 
-                    {/* Custom RTMP Section */}
-                    <div className="p-6 bg-white/5 border border-white/10 rounded-2xl">
-                      <div className="flex items-center gap-3 mb-6">
-                        <Globe className="w-5 h-5 text-cyan-500" />
-                        <h3 className="font-bold">Custom RTMP Destination</h3>
+                    {/* Custom RTMP Section - Moved to Streaming Tab */}
+                    <div className="flex items-center justify-between p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-cyan-500 shrink-0" />
+                        <p className="text-xs text-cyan-200 leading-relaxed">
+                          Custom RTMP settings have been moved to the <span className="font-bold">Streaming</span> tab.
+                        </p>
                       </div>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Server URL</label>
-                          <div className="relative">
-                            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                            <input 
-                              type="text" 
-                              placeholder="rtmps://live-api-s.facebook.com:443/rtmp/"
-                              className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Stream Key</label>
-                          <div className="relative">
-                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                            <input 
-                              type="password" 
-                              placeholder="••••••••••••••••"
-                              className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-xl">
-                      <AlertCircle className="w-5 h-5 text-cyan-500 shrink-0" />
-                      <p className="text-xs text-cyan-200 leading-relaxed">
-                        Streaming to external platforms requires a server-side relay. This preview simulates the API connection and configuration flow.
-                      </p>
+                      <button 
+                        onClick={() => setSettingsTab('streaming')}
+                        className="px-3 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-500 text-[10px] font-bold rounded-lg transition-all"
+                      >
+                        Go to Streaming
+                      </button>
                     </div>
                   </div>
                 ) : settingsTab === 'overlays' ? (
@@ -874,7 +869,216 @@ function AppContent() {
                       </div>
                     </div>
                   </div>
-                ) : (
+                ) : settingsTab === 'streaming' ? (
+                  <div className="space-y-8">
+                    {/* Stream Information */}
+                    <div className="space-y-6">
+                      <h3 className="font-bold text-lg flex items-center gap-2">
+                        <Layout className="w-5 h-5 text-cyan-500" />
+                        Stream Information
+                      </h3>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Stream Title</label>
+                          <input 
+                            type="text" 
+                            value={streamingSettings.title}
+                            onChange={(e) => setStreamingSettings(prev => ({ ...prev, title: e.target.value }))}
+                            placeholder="My Awesome Livestream"
+                            className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 px-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Description</label>
+                          <textarea 
+                            value={streamingSettings.description}
+                            onChange={(e) => setStreamingSettings(prev => ({ ...prev, description: e.target.value }))}
+                            placeholder="Tell your viewers about your stream..."
+                            rows={3}
+                            className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 px-4 text-sm outline-none focus:border-cyan-500/50 transition-all resize-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Custom RTMP Destination */}
+                    <div className="space-y-6 pt-8 border-t border-white/10">
+                      <div className="flex items-center gap-3">
+                        <Globe className="w-5 h-5 text-cyan-500" />
+                        <h3 className="font-bold text-lg">Custom RTMP Destination</h3>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Server URL</label>
+                          <div className="relative group">
+                            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                            <input 
+                              type="text" 
+                              value={destinations.custom.url}
+                              onChange={(e) => setDestinations(prev => ({ ...prev, custom: { ...prev.custom, url: e.target.value } }))}
+                              placeholder="rtmps://live-api-s.facebook.com:443/rtmp/"
+                              className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 pl-10 pr-12 text-sm outline-none focus:border-cyan-500/50 transition-all"
+                            />
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(destinations.custom.url);
+                                // Could add a toast here
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 hover:bg-white/10 rounded-lg text-gray-500 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                              title="Copy URL"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Stream Key</label>
+                          <div className="relative group">
+                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                            <input 
+                              type="password" 
+                              value={destinations.custom.key}
+                              onChange={(e) => setDestinations(prev => ({ ...prev, custom: { ...prev.custom, key: e.target.value } }))}
+                              placeholder="••••••••••••••••"
+                              className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 pl-10 pr-12 text-sm outline-none focus:border-cyan-500/50 transition-all"
+                            />
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(destinations.custom.key);
+                                // Could add a toast here
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 hover:bg-white/10 rounded-lg text-gray-500 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                              title="Copy Key"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stream Quality Settings */}
+                    <div className="space-y-6 pt-8 border-t border-white/10">
+                      <h3 className="font-bold text-lg flex items-center gap-2">
+                        <Zap className="w-5 h-5 text-cyan-500" />
+                        Stream Quality
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Video Bitrate</label>
+                          <select 
+                            value={streamingSettings.bitrate}
+                            onChange={(e) => setStreamingSettings(prev => ({ ...prev, bitrate: e.target.value }))}
+                            className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 px-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
+                          >
+                            <option value="2500">2500 Kbps (720p)</option>
+                            <option value="4500">4500 Kbps (1080p)</option>
+                            <option value="6000">6000 Kbps (1080p 60fps)</option>
+                            <option value="9000">9000 Kbps (4K)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Resolution</label>
+                          <select 
+                            value={streamingSettings.resolution}
+                            onChange={(e) => setStreamingSettings(prev => ({ ...prev, resolution: e.target.value }))}
+                            className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 px-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
+                          >
+                            <option value="720p">1280 x 720</option>
+                            <option value="1080p">1920 x 1080</option>
+                            <option value="1440p">2560 x 1440</option>
+                            <option value="4K">3840 x 2160</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Frame Rate (FPS)</label>
+                          <select 
+                            value={streamingSettings.fps}
+                            onChange={(e) => setStreamingSettings(prev => ({ ...prev, fps: e.target.value }))}
+                            className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 px-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
+                          >
+                            <option value="30">30 FPS</option>
+                            <option value="60">60 FPS</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Latency Mode</label>
+                          <select 
+                            value={streamingSettings.latency}
+                            onChange={(e) => setStreamingSettings(prev => ({ ...prev, latency: e.target.value }))}
+                            className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 px-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
+                          >
+                            <option value="normal">Normal Latency</option>
+                            <option value="low">Low Latency</option>
+                            <option value="ultra-low">Ultra-Low Latency</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="pt-8 border-t border-white/10 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>Settings are applied automatically</span>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setShowStreamSettings(false);
+                          if (!isLive) toggleLive();
+                        }}
+                        className={`px-6 py-2 rounded-xl font-bold text-sm transition-all shadow-lg ${isLive ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-cyan-500 text-black shadow-cyan-500/20 hover:bg-cyan-400'}`}
+                      >
+                        {isLive ? 'STREAMING ACTIVE' : 'GO LIVE NOW'}
+                      </button>
+                    </div>
+                  </div>
+                ) : settingsTab === 'media' ? (
+                  <div className="space-y-8">
+                    <div className="p-6 bg-white/5 border border-white/10 rounded-2xl">
+                      <div className="flex items-center gap-3 mb-6">
+                        <Monitor className="w-5 h-5 text-cyan-500" />
+                        <h3 className="font-bold text-lg">Media Source Settings</h3>
+                      </div>
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-cyan-500/10 rounded-lg">
+                              <VideoIcon className="w-4 h-4 text-cyan-500" />
+                            </div>
+                            <div>
+                              <span className="text-sm font-medium text-white block">Camera Source</span>
+                              <span className="text-[10px] text-gray-500">Use your webcam for live broadcast</span>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => setStreamSource('camera')}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${streamSource === 'camera' ? 'bg-cyan-500 text-black' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                          >
+                            {streamSource === 'camera' ? 'ACTIVE' : 'SELECT'}
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-purple-500/10 rounded-lg">
+                              <Film className="w-4 h-4 text-purple-500" />
+                            </div>
+                            <div>
+                              <span className="text-sm font-medium text-white block">Video File</span>
+                              <span className="text-[10px] text-gray-500">Stream a local video file or URL</span>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => setStreamSource('video')}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${streamSource === 'video' ? 'bg-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                          >
+                            {streamSource === 'video' ? 'ACTIVE' : 'SELECT'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : settingsTab === 'server' ? (
                   <div className="space-y-8">
                     <div className="flex items-center justify-between p-6 bg-white/5 rounded-2xl border border-white/10">
                       <div className="flex items-center gap-4">
@@ -934,7 +1138,7 @@ function AppContent() {
                       </div>
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
 
               <div className="p-6 bg-white/5 border-t border-white/10 flex justify-end gap-3">
