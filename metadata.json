@@ -1,0 +1,8 @@
+{
+  "name": "StreamFlow",
+  "description": "A production-ready Streamlabs clone with live camera streaming, interactive chat, and real-time alerts.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
