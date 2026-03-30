@@ -968,61 +968,84 @@ function AppContent() {
               </div>
 
               <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-                {user ? (
-                  <div className="space-y-6">
-                    {/* Mini Player in Menu */}
+                {/* Livestream Player Section in Sidebar */}
+                <div className="mb-8 p-4 bg-white/5 border border-white/10 rounded-2xl relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none" />
+                  <div className="flex items-center justify-between mb-4 relative z-10">
+                    <div className="flex items-center gap-2">
+                      <VideoIcon className="w-4 h-4 text-cyan-500" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Livestream Player</span>
+                    </div>
                     {isLive && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mb-6 rounded-2xl overflow-hidden border border-white/10 bg-black/40 backdrop-blur-md group relative"
-                      >
-                        <div className="relative aspect-video">
-                          <video 
-                            src={streamSource === 'video' ? videoUrl : undefined}
-                            autoPlay 
-                            muted 
-                            playsInline 
-                            loop
-                            className="w-full h-full object-cover grayscale-[0.3] group-hover:grayscale-0 transition-all duration-500"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                          <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-red-600 text-white text-[8px] font-bold uppercase rounded flex items-center gap-1 shadow-lg">
-                            <span className="w-1 h-1 bg-white rounded-full animate-pulse"></span>
-                            Live
-                          </div>
-                          <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
-                            <div className="flex items-center gap-1 text-[10px] text-white font-medium bg-black/40 px-1.5 py-0.5 rounded backdrop-blur-sm">
-                              <Users className="w-2.5 h-2.5" />
-                              {viewers.toLocaleString()}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="p-3 flex items-center justify-between border-t border-white/5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-cyan-500 to-green-400 p-0.5">
-                              <div className="w-full h-full rounded-full bg-[#18181b] flex items-center justify-center">
-                                <Zap className="w-3 h-3 text-cyan-500 fill-current" />
-                              </div>
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-[10px] font-bold text-white leading-none">STREAMFLOW LIVE</span>
-                              <span className="text-[8px] text-gray-500 uppercase tracking-wider mt-0.5">Active Session</span>
-                            </div>
+                      <span className="flex items-center gap-1.5 px-2 py-0.5 bg-red-500/10 text-red-500 text-[10px] font-black uppercase rounded-full border border-red-500/20">
+                        <span className="w-1 h-1 bg-red-500 rounded-full animate-pulse" />
+                        Live
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="relative aspect-video rounded-xl overflow-hidden bg-black/40 border border-white/5 group-hover:border-cyan-500/30 transition-all duration-500">
+                    {isLive ? (
+                      <>
+                        <video 
+                          src={streamSource === 'video' ? videoUrl : undefined}
+                          autoPlay 
+                          muted 
+                          playsInline 
+                          loop
+                          className="w-full h-full object-cover grayscale-[0.3] group-hover:grayscale-0 transition-all duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-[10px] text-white font-medium bg-black/40 px-2 py-1 rounded-lg backdrop-blur-sm border border-white/10">
+                            <Users className="w-3 h-3 text-cyan-500" />
+                            {viewers.toLocaleString()}
                           </div>
                           <button 
                             onClick={() => {
                               setIsSidebarOpen(false);
                               window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
-                            className="px-3 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-500 text-[10px] font-bold rounded-lg transition-all border border-cyan-500/20"
+                            className="p-1.5 bg-cyan-500 hover:bg-cyan-400 text-black rounded-lg transition-all shadow-lg shadow-cyan-500/20"
                           >
-                            OPEN
+                            <ExternalLink className="w-3 h-3" />
                           </button>
                         </div>
-                      </motion.div>
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+                        <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-500">
+                          <VideoOff className="w-5 h-5 text-gray-600" />
+                        </div>
+                        <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">No active stream</p>
+                      </div>
                     )}
+                  </div>
 
+                  {!isLive && (
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      whileTap={{ scale: 0.98, y: 0 }}
+                      onClick={() => {
+                        if (!user) {
+                          // If guest, show login prompt or just scroll to top
+                          setIsSidebarOpen(false);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        } else {
+                          setIsSidebarOpen(false);
+                          toggleLive('camera');
+                        }
+                      }}
+                      className="w-full mt-4 py-3 bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-black font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-cyan-500/20 flex items-center justify-center gap-2"
+                    >
+                      <Zap className="w-4 h-4 fill-current" />
+                      Go Live Now
+                    </motion.button>
+                  )}
+                </div>
+
+                {user ? (
+                  <div className="space-y-6">
                     <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10">
                       <img src={user.avatar} alt="Avatar" className="w-12 h-12 rounded-full border border-cyan-500/50" referrerPolicy="no-referrer" />
                       <div>
@@ -1131,9 +1154,12 @@ function AppContent() {
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors lg:hidden"
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors lg:hidden relative"
             >
               <Menu className="w-6 h-6" />
+              {isLive && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#18181b] animate-pulse"></span>
+              )}
             </button>
             <div className="flex items-center gap-2 group cursor-pointer">
               <motion.div 
@@ -1148,10 +1174,13 @@ function AppContent() {
           <nav className="hidden md:flex items-center gap-4 text-sm font-medium text-gray-400">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="hidden lg:flex items-center gap-2 hover:text-white transition-colors"
+              className="hidden lg:flex items-center gap-2 hover:text-white transition-colors relative"
             >
               <Menu className="w-4 h-4" />
               Menu
+              {isLive && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-[#18181b] animate-pulse"></span>
+              )}
             </button>
             <a href="#" className="text-white hover:text-cyan-400 transition-colors">Browse</a>
             <a href="#" className="hover:text-white transition-colors">Following</a>
@@ -1186,14 +1215,27 @@ function AppContent() {
               Live
             </motion.button>
           )}
-          {isHost && !isLive && (
+          {user && !isLive && (
             <motion.button
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => toggleLive('camera')}
-              className="hidden sm:flex items-center gap-2 px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-black rounded-lg transition-all shadow-lg shadow-cyan-500/20 uppercase tracking-tight"
+              className="hidden sm:flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-black text-xs font-black rounded-xl transition-all shadow-xl shadow-cyan-500/20 uppercase tracking-widest"
+            >
+              <VideoIcon className="w-4 h-4 fill-current" />
+              Go Live
+            </motion.button>
+          )}
+          {!user && !isLive && (
+            <motion.button
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setIsSidebarOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-6 py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-black rounded-xl transition-all border border-white/10 uppercase tracking-widest"
             >
               <VideoIcon className="w-4 h-4" />
               Go Live
@@ -1202,7 +1244,7 @@ function AppContent() {
           {!user && (
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="hidden sm:block px-4 py-1.5 bg-white/5 hover:bg-white/10 text-white text-sm font-bold rounded-lg transition-colors border border-white/10"
+              className="hidden sm:block px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black text-sm font-bold rounded-lg transition-colors"
             >
               Log In
             </button>
@@ -1227,7 +1269,27 @@ function AppContent() {
         <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
           
           {/* --- Video Player Section --- */}
-          <div className="relative aspect-video bg-black group overflow-hidden rounded-2xl">
+          <div className="p-6 pb-0">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/20">
+                  <VideoIcon className="w-5 h-5 text-cyan-500" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-white tracking-tight uppercase italic">Livestream Player</h2>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Global Broadcast Channel</p>
+                </div>
+              </div>
+              {isLive && (
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-red-500/10 text-red-500 text-xs font-black uppercase rounded-lg border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]">
+                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                    Live
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="relative aspect-video bg-black group overflow-hidden rounded-3xl shadow-2xl shadow-black/50 border border-white/5">
             {/* Custom Stream Border */}
             {overlaySettings.showBorder && (
               <div 
@@ -1462,9 +1524,10 @@ function AppContent() {
               </div>
             </div>
           </div>
+        </div>
 
-          {/* --- Stream Info Section --- */}
-          <div className="p-6 bg-[#0e0e10]">
+        {/* --- Stream Info Section --- */}
+        <div className="p-6 bg-[#0e0e10]">
             <div className="flex flex-col md:flex-row justify-between gap-6">
               <div className="flex gap-4">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-cyan-500 to-green-400 p-1">
