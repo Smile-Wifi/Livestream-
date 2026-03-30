@@ -163,7 +163,9 @@ function AppContent() {
   const [user, setUser] = useState<{ name: string; email: string; avatar: string; uid: string; role: string } | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [mediaType, setMediaType] = useState<'video' | 'audio'>('video');
-  const [isHost, setIsHost] = useState(false); // For demo, first user or explicit toggle
+  const [isHost, setIsHost] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [streamState, setStreamState] = useState<any>(null);
   const [destinations, setDestinations] = useState({
     youtube: { connected: false, name: '' },
     facebook: { connected: false, name: '' },
@@ -190,21 +192,25 @@ function AppContent() {
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            setUser({
+            const role = userData.role || (firebaseUser.email === 'kaptenlanaja2024@gmail.com' ? 'admin' : 'user');
+            const updatedUser = {
               uid: firebaseUser.uid,
               name: userData.displayName || firebaseUser.displayName || 'Anonymous',
               email: firebaseUser.email || '',
               avatar: userData.photoURL || firebaseUser.photoURL || `https://picsum.photos/seed/${firebaseUser.uid}/200`,
-              role: userData.role || 'user'
-            });
+              role: role
+            };
+            setUser(updatedUser);
+            setIsAdmin(role === 'admin');
           } else {
             // Create user profile if it doesn't exist
+            const role = firebaseUser.email === 'kaptenlanaja2024@gmail.com' ? 'admin' : 'user';
             const newUser = {
               uid: firebaseUser.uid,
               displayName: firebaseUser.displayName || 'Anonymous',
               email: firebaseUser.email || '',
               photoURL: firebaseUser.photoURL || `https://picsum.photos/seed/${firebaseUser.uid}/200`,
-              role: 'user'
+              role: role
             };
             await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
             setUser({
@@ -212,6 +218,7 @@ function AppContent() {
               name: newUser.displayName,
               avatar: newUser.photoURL
             });
+            setIsAdmin(role === 'admin');
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
@@ -245,6 +252,7 @@ function AppContent() {
     const unsubscribe = onSnapshot(doc(db, 'stream_state', 'current'), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
+        setStreamState(data);
         
         // Update isHost based on Firestore data
         if (user && data.hostId === user.uid) {
@@ -278,6 +286,7 @@ function AppContent() {
         }
       } else if (user) {
         // If no stream state exists, current user can be host
+        setStreamState(null);
         setIsHost(true);
       }
     }, (error) => {
@@ -289,10 +298,14 @@ function AppContent() {
 
   // Update global state if we are the host
   const updateGlobalStreamState = async (updates: any) => {
-    if (!isHost || !user) return;
+    if (!user) return;
+    // Allow update if we are the host, OR if there is no current stream state (we are starting it), OR if we are an admin
+    if (streamState && !isHost && !isAdmin) return;
+    
     try {
       await updateDoc(doc(db, 'stream_state', 'current'), {
         ...updates,
+        isLive: updates.isLive !== undefined ? updates.isLive : isLive,
         lastUpdated: Date.now(),
         updatedBy: user.uid,
         hostId: user.uid
@@ -305,6 +318,7 @@ function AppContent() {
           mediaType: mediaType,
           isPlaying: !videoRef.current?.paused,
           currentTime: videoRef.current?.currentTime || 0,
+          isLive: updates.isLive !== undefined ? updates.isLive : isLive,
           lastUpdated: Date.now(),
           updatedBy: user.uid,
           hostId: user.uid,
@@ -390,7 +404,7 @@ function AppContent() {
       setUptime(0);
       if (streamInterval.current) clearInterval(streamInterval.current);
       
-      if (isHost) {
+      if (isHost || isAdmin) {
         updateGlobalStreamState({ isLive: false, isPlaying: false });
       }
     } else {
@@ -407,7 +421,7 @@ function AppContent() {
         addAlert({ type: 'follower', user: 'NewFan_99' });
       }, 5000);
 
-      if (isHost) {
+      if (isHost || isAdmin || !streamState) {
         updateGlobalStreamState({ 
           isLive: true, 
           isPlaying: true, 
@@ -448,7 +462,7 @@ function AppContent() {
     setShowVideoGallery(false);
     toggleLive('video');
     
-    if (isHost) {
+    if (isHost || isAdmin || !streamState) {
       updateGlobalStreamState({
         mediaUrl: url,
         mediaType: type,
