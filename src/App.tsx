@@ -876,9 +876,62 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="flex-1 p-6">
+              <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
                 {user ? (
                   <div className="space-y-6">
+                    {/* Mini Player in Menu */}
+                    {isLive && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-6 rounded-2xl overflow-hidden border border-white/10 bg-black/40 backdrop-blur-md group relative"
+                      >
+                        <div className="relative aspect-video">
+                          <video 
+                            src={streamSource === 'video' ? videoUrl : undefined}
+                            autoPlay 
+                            muted 
+                            playsInline 
+                            loop
+                            className="w-full h-full object-cover grayscale-[0.3] group-hover:grayscale-0 transition-all duration-500"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                          <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-red-600 text-white text-[8px] font-bold uppercase rounded flex items-center gap-1 shadow-lg">
+                            <span className="w-1 h-1 bg-white rounded-full animate-pulse"></span>
+                            Live
+                          </div>
+                          <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
+                            <div className="flex items-center gap-1 text-[10px] text-white font-medium bg-black/40 px-1.5 py-0.5 rounded backdrop-blur-sm">
+                              <Users className="w-2.5 h-2.5" />
+                              {viewers.toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-3 flex items-center justify-between border-t border-white/5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-cyan-500 to-green-400 p-0.5">
+                              <div className="w-full h-full rounded-full bg-[#18181b] flex items-center justify-center">
+                                <Zap className="w-3 h-3 text-cyan-500 fill-current" />
+                              </div>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-bold text-white leading-none">STREAMFLOW LIVE</span>
+                              <span className="text-[8px] text-gray-500 uppercase tracking-wider mt-0.5">Active Session</span>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              setIsSidebarOpen(false);
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="px-3 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-500 text-[10px] font-bold rounded-lg transition-all border border-cyan-500/20"
+                          >
+                            OPEN
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+
                     <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10">
                       <img src={user.avatar} alt="Avatar" className="w-12 h-12 rounded-full border border-cyan-500/50" referrerPolicy="no-referrer" />
                       <div>
@@ -888,31 +941,6 @@ export default function App() {
                     </div>
                     
                     <div className="space-y-2">
-                      {isLive && (
-                        <motion.button 
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => setIsSidebarOpen(false)}
-                          className="w-full flex items-center justify-between p-4 bg-red-500/10 border border-red-500/20 rounded-2xl transition-all group"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                                <VideoIcon className="w-5 h-5 text-red-500" />
-                              </div>
-                              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-[#18181b] animate-pulse"></span>
-                            </div>
-                            <div className="text-left">
-                              <p className="text-sm font-black text-red-500 uppercase tracking-tighter">Live Now</p>
-                              <p className="text-[10px] text-gray-500 uppercase font-bold">Currently Streaming</p>
-                            </div>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-red-500 group-hover:translate-x-1 transition-transform" />
-                        </motion.button>
-                      )}
-
                       <button 
                         onClick={() => { setShowStreamSettings(true); setIsSidebarOpen(false); }}
                         className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition-colors text-sm font-medium"
