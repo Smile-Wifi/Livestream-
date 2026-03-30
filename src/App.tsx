@@ -25,6 +25,7 @@ import {
   Youtube,
   Globe,
   Key,
+  ChevronRight,
   CheckCircle2,
   AlertCircle,
   Play,
@@ -887,6 +888,31 @@ export default function App() {
                     </div>
                     
                     <div className="space-y-2">
+                      {isLive && (
+                        <motion.button 
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setIsSidebarOpen(false)}
+                          className="w-full flex items-center justify-between p-4 bg-red-500/10 border border-red-500/20 rounded-2xl transition-all group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                                <VideoIcon className="w-5 h-5 text-red-500" />
+                              </div>
+                              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-[#18181b] animate-pulse"></span>
+                            </div>
+                            <div className="text-left">
+                              <p className="text-sm font-black text-red-500 uppercase tracking-tighter">Live Now</p>
+                              <p className="text-[10px] text-gray-500 uppercase font-bold">Currently Streaming</p>
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-red-500 group-hover:translate-x-1 transition-transform" />
+                        </motion.button>
+                      )}
+
                       <button 
                         onClick={() => { setShowStreamSettings(true); setIsSidebarOpen(false); }}
                         className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition-colors text-sm font-medium"
@@ -960,11 +986,14 @@ export default function App() {
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center">
+            <div className="flex items-center gap-2 group cursor-pointer">
+              <motion.div 
+                whileHover={{ rotate: 15, scale: 1.1 }}
+                className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20"
+              >
                 <Zap className="w-5 h-5 text-black fill-current" />
-              </div>
-              <span className="font-bold text-xl tracking-tighter">STREAMFLOW</span>
+              </motion.div>
+              <span className="font-bold text-xl tracking-tighter group-hover:text-cyan-400 transition-colors">STREAMFLOW</span>
             </div>
           </div>
           <nav className="hidden md:flex items-center gap-4 text-sm font-medium text-gray-400">
@@ -975,12 +1004,52 @@ export default function App() {
               <Menu className="w-4 h-4" />
               Menu
             </button>
-            <a href="#" className="text-white">Browse</a>
+            <a href="#" className="text-white hover:text-cyan-400 transition-colors">Browse</a>
             <a href="#" className="hover:text-white transition-colors">Following</a>
+            
+            {isLive && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-full text-red-500 text-[10px] font-black uppercase tracking-widest"
+              >
+                <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                Live Now
+              </motion.button>
+            )}
           </nav>
         </div>
 
         <div className="flex items-center gap-3">
+          {isLive && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="md:hidden flex items-center gap-2 px-2 py-1 bg-red-500/10 border border-red-500/20 rounded-full text-red-500 text-[8px] font-black uppercase tracking-widest"
+            >
+              <span className="w-1 h-1 bg-red-500 rounded-full animate-pulse"></span>
+              Live
+            </motion.button>
+          )}
+          {isHost && !isLive && (
+            <motion.button
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => toggleLive('camera')}
+              className="hidden sm:flex items-center gap-2 px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-black rounded-lg transition-all shadow-lg shadow-cyan-500/20 uppercase tracking-tight"
+            >
+              <VideoIcon className="w-4 h-4" />
+              Go Live
+            </motion.button>
+          )}
           {!user && (
             <button 
               onClick={() => setIsSidebarOpen(true)}
@@ -1079,30 +1148,36 @@ export default function App() {
                 </p>
                 {!isLive && (
                   <div className="flex flex-col gap-4 mt-6 w-full max-w-sm px-4">
-                    <button 
-                      onClick={() => toggleLive('camera')}
-                      className="w-full px-8 py-3 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20"
-                    >
-                      <VideoIcon className="w-5 h-5" />
-                      GO LIVE WITH CAMERA
-                    </button>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      <button 
-                        onClick={() => setShowVideoGallery(true)}
-                        className="px-4 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2"
-                      >
-                        <Library className="w-4 h-4 text-cyan-500" />
-                        GALLERY
-                      </button>
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="px-4 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2"
-                      >
-                        <Share2 className="w-4 h-4 text-cyan-500 rotate-90" />
-                        UPLOAD
-                      </button>
-                    </div>
+                <motion.button 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => toggleLive('camera')}
+                  className="w-full px-8 py-3 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20"
+                >
+                  <VideoIcon className="w-5 h-5" />
+                  GO LIVE WITH CAMERA
+                </motion.button>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowVideoGallery(true)}
+                    className="px-4 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2 hover:border-cyan-500/30"
+                  >
+                    <Library className="w-4 h-4 text-cyan-500" />
+                    GALLERY
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-4 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2 hover:border-cyan-500/30"
+                  >
+                    <Share2 className="w-4 h-4 text-cyan-500 rotate-90" />
+                    UPLOAD
+                  </motion.button>
+                </div>
 
                     <form onSubmit={handleUrlStream} className="relative group">
                       <div className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-white/5 group-focus-within:bg-cyan-500/10 transition-colors">
@@ -1227,12 +1302,14 @@ export default function App() {
                 >
                   {isVideoOff ? <VideoOff className="w-6 h-6" /> : <VideoIcon className="w-6 h-6" />}
                 </button>
-                <button 
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={toggleLive}
-                  className={`px-8 py-3 rounded-full font-bold transition-all ${isLive ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-cyan-500 hover:bg-cyan-400 text-black'}`}
+                  className={`px-8 py-3 rounded-full font-bold transition-all shadow-xl ${isLive ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/20' : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-cyan-500/20'}`}
                 >
                   {isLive ? 'STOP STREAM' : 'START STREAM'}
-                </button>
+                </motion.button>
               </div>
             </div>
           </div>
