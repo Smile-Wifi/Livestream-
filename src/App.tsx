@@ -84,6 +84,55 @@ export default function App() {
   });
   const [activeDestination, setActiveDestination] = useState<'youtube' | 'facebook' | 'custom' | null>(null);
   const [showStreamSettings, setShowStreamSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'destinations' | 'overlays' | 'server'>('destinations');
+  const [overlaySettings, setOverlaySettings] = useState({
+    borderColor: '#06b6d4',
+    borderWidth: 2,
+    alertPosition: 'top-left' as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center',
+    showBorder: false,
+    borderGlow: true
+  });
+  const [serverStatus, setServerStatus] = useState<{ online: boolean; viewers: number; uptime: number }>({ online: false, viewers: 0, uptime: 0 });
+  const socketRef = useRef<WebSocket | null>(null);
+
+  // --- WebSocket Logic ---
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socket = new WebSocket(`${protocol}//${window.location.host}`);
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      console.log('Connected to local stream server');
+      setServerStatus(prev => ({ ...prev, online: true }));
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'STATUS') {
+          setServerStatus(prev => ({ ...prev, ...payload.data }));
+        } else if (payload.type === 'VIEWERS') {
+          setServerStatus(prev => ({ ...prev, viewers: payload.data }));
+          setViewers(payload.data + 1200); // Base viewers + server clients
+        } else if (payload.type === 'CHAT') {
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            user: payload.data.user,
+            text: payload.data.text,
+            color: CHAT_COLORS[Math.floor(Math.random() * CHAT_COLORS.length)]
+          }].slice(-50));
+        }
+      } catch (e) {
+        console.error('Error parsing message:', e);
+      }
+    };
+
+    socket.onclose = () => {
+      setServerStatus(prev => ({ ...prev, online: false }));
+    };
+
+    return () => socket.close();
+  }, []);
   const [showVideoGallery, setShowVideoGallery] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
   
@@ -175,15 +224,24 @@ export default function App() {
   const sendMessage = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputText.trim()) return;
-    
-    const newMessage: ChatMessage = {
-      id: Date.now().toString(),
-      user: 'You',
-      text: inputText,
-      color: 'text-white font-bold',
+
+    const newMessage = {
+      user: user?.name || 'You',
+      text: inputText
     };
+
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'CHAT', data: newMessage }));
+    } else {
+      // Fallback if server is down
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        user: newMessage.user,
+        text: newMessage.text,
+        color: 'text-white font-bold'
+      }]);
+    }
     
-    setMessages(prev => [...prev, newMessage]);
     setInputText('');
   };
 
@@ -309,130 +367,312 @@ export default function App() {
                   <div className="p-2 bg-cyan-500/10 rounded-lg">
                     <Settings className="w-5 h-5 text-cyan-500" />
                   </div>
-                  <h2 className="text-xl font-bold">Stream Destinations</h2>
+                  <h2 className="text-xl font-bold">Stream Settings</h2>
                 </div>
                 <button onClick={() => setShowStreamSettings(false)} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="p-8 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* YouTube Card */}
-                  <div className={`p-5 rounded-2xl border transition-all ${destinations.youtube.connected ? 'border-red-500/50 bg-red-500/5' : 'border-white/10 bg-white/5 hover:border-white/20'}`}>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-red-600 rounded-lg">
-                          <Youtube className="w-5 h-5 text-white" />
+              <div className="flex border-b border-white/10 bg-white/2">
+                <button 
+                  onClick={() => setSettingsTab('destinations')}
+                  className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${settingsTab === 'destinations' ? 'border-cyan-500 text-cyan-500 bg-cyan-500/5' : 'border-transparent text-gray-400 hover:text-white'}`}
+                >
+                  DESTINATIONS
+                </button>
+                <button 
+                  onClick={() => setSettingsTab('overlays')}
+                  className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${settingsTab === 'overlays' ? 'border-cyan-500 text-cyan-500 bg-cyan-500/5' : 'border-transparent text-gray-400 hover:text-white'}`}
+                >
+                  OVERLAYS
+                </button>
+                <button 
+                  onClick={() => setSettingsTab('server')}
+                  className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${settingsTab === 'server' ? 'border-cyan-500 text-cyan-500 bg-cyan-500/5' : 'border-transparent text-gray-400 hover:text-white'}`}
+                >
+                  LOCAL SERVER
+                </button>
+              </div>
+
+              <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                {settingsTab === 'destinations' ? (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* YouTube Card */}
+                      <div className={`p-5 rounded-2xl border transition-all ${destinations.youtube.connected ? 'border-red-500/50 bg-red-500/5' : 'border-white/10 bg-white/5 hover:border-white/20'}`}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-red-600 rounded-lg">
+                              <Youtube className="w-5 h-5 text-white" />
+                            </div>
+                            <span className="font-bold">YouTube Live</span>
+                          </div>
+                          {destinations.youtube.connected && <CheckCircle2 className="w-5 h-5 text-green-500" />}
                         </div>
-                        <span className="font-bold">YouTube Live</span>
+                        {destinations.youtube.connected ? (
+                          <div className="space-y-3">
+                            <p className="text-sm text-gray-400">Connected as <span className="text-white font-medium">{destinations.youtube.name}</span></p>
+                            <button 
+                              onClick={() => disconnectDestination('youtube')}
+                              className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              Disconnect
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => connectDestination('youtube')}
+                            className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition-all"
+                          >
+                            Connect YouTube
+                          </button>
+                        )}
                       </div>
-                      {destinations.youtube.connected && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+
+                      {/* Facebook Card */}
+                      <div className={`p-5 rounded-2xl border transition-all ${destinations.facebook.connected ? 'border-blue-500/50 bg-blue-500/5' : 'border-white/10 bg-white/5 hover:border-white/20'}`}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-[#1877f2] rounded-lg">
+                              <Facebook className="w-5 h-5 text-white fill-current" />
+                            </div>
+                            <span className="font-bold">Facebook Live</span>
+                          </div>
+                          {destinations.facebook.connected && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+                        </div>
+                        {destinations.facebook.connected ? (
+                          <div className="space-y-3">
+                            <p className="text-sm text-gray-400">Connected as <span className="text-white font-medium">{destinations.facebook.name}</span></p>
+                            <button 
+                              onClick={() => disconnectDestination('facebook')}
+                              className="w-full py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              Disconnect
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => connectDestination('facebook')}
+                            className="w-full py-2.5 bg-[#1877f2] hover:bg-[#166fe5] text-white rounded-lg text-sm font-bold transition-all"
+                          >
+                            Connect Facebook
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {destinations.youtube.connected ? (
-                      <div className="space-y-3">
-                        <p className="text-sm text-gray-400">Connected as <span className="text-white font-medium">{destinations.youtube.name}</span></p>
+
+                    {/* Custom RTMP Section */}
+                    <div className="p-6 bg-white/5 border border-white/10 rounded-2xl">
+                      <div className="flex items-center gap-3 mb-6">
+                        <Globe className="w-5 h-5 text-cyan-500" />
+                        <h3 className="font-bold">Custom RTMP Destination</h3>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Server URL</label>
+                          <div className="relative">
+                            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                            <input 
+                              type="text" 
+                              placeholder="rtmps://live-api-s.facebook.com:443/rtmp/"
+                              className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Stream Key</label>
+                          <div className="relative">
+                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                            <input 
+                              type="password" 
+                              placeholder="••••••••••••••••"
+                              className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-xl">
+                      <AlertCircle className="w-5 h-5 text-cyan-500 shrink-0" />
+                      <p className="text-xs text-cyan-200 leading-relaxed">
+                        Streaming to external platforms requires a server-side relay. This preview simulates the API connection and configuration flow.
+                      </p>
+                    </div>
+                  </div>
+                ) : settingsTab === 'overlays' ? (
+                  <div className="space-y-8">
+                    {/* Webcam Border Settings */}
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-bold text-lg">Stream Border</h3>
+                          <p className="text-sm text-gray-400">Add a decorative frame to your stream</p>
+                        </div>
                         <button 
-                          onClick={() => disconnectDestination('youtube')}
-                          className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg text-xs font-bold transition-colors"
+                          onClick={() => setOverlaySettings(prev => ({ ...prev, showBorder: !prev.showBorder }))}
+                          className={`w-12 h-6 rounded-full transition-all relative ${overlaySettings.showBorder ? 'bg-cyan-500' : 'bg-white/10'}`}
                         >
-                          Disconnect
+                          <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${overlaySettings.showBorder ? 'left-7' : 'left-1'}`} />
                         </button>
                       </div>
-                    ) : (
-                      <button 
-                        onClick={() => connectDestination('youtube')}
-                        className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition-all"
-                      >
-                        Connect YouTube
-                      </button>
-                    )}
-                  </div>
 
-                  {/* Facebook Card */}
-                  <div className={`p-5 rounded-2xl border transition-all ${destinations.facebook.connected ? 'border-blue-500/50 bg-blue-500/5' : 'border-white/10 bg-white/5 hover:border-white/20'}`}>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-[#1877f2] rounded-lg">
-                          <Facebook className="w-5 h-5 text-white fill-current" />
-                        </div>
-                        <span className="font-bold">Facebook Live</span>
-                      </div>
-                      {destinations.facebook.connected && <CheckCircle2 className="w-5 h-5 text-green-500" />}
-                    </div>
-                    {destinations.facebook.connected ? (
-                      <div className="space-y-3">
-                        <p className="text-sm text-gray-400">Connected as <span className="text-white font-medium">{destinations.facebook.name}</span></p>
-                        <button 
-                          onClick={() => disconnectDestination('facebook')}
-                          className="w-full py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-bold transition-colors"
+                      {overlaySettings.showBorder && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="space-y-6 pt-4 border-t border-white/5"
                         >
-                          Disconnect
-                        </button>
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => connectDestination('facebook')}
-                        className="w-full py-2.5 bg-[#1877f2] hover:bg-[#166fe5] text-white rounded-lg text-sm font-bold transition-all"
-                      >
-                        Connect Facebook
-                      </button>
-                    )}
-                  </div>
-                </div>
+                          <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Border Color</label>
+                              <div className="flex gap-2">
+                                {['#06b6d4', '#ef4444', '#22c55e', '#a855f7', '#f59e0b'].map(color => (
+                                  <button 
+                                    key={color}
+                                    onClick={() => setOverlaySettings(prev => ({ ...prev, borderColor: color }))}
+                                    className={`w-8 h-8 rounded-lg border-2 transition-all ${overlaySettings.borderColor === color ? 'border-white scale-110' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                                    style={{ backgroundColor: color }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Border Width ({overlaySettings.borderWidth}px)</label>
+                              <input 
+                                type="range" 
+                                min="1" 
+                                max="10" 
+                                value={overlaySettings.borderWidth}
+                                onChange={(e) => setOverlaySettings(prev => ({ ...prev, borderWidth: parseInt(e.target.value) }))}
+                                className="w-full accent-cyan-500"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-cyan-500/10 rounded-lg">
+                                <Zap className="w-4 h-4 text-cyan-500" />
+                              </div>
+                              <span className="text-sm font-medium text-white">Enable Neon Glow</span>
+                            </div>
+                            <button 
+                              onClick={() => setOverlaySettings(prev => ({ ...prev, borderGlow: !prev.borderGlow }))}
+                              className={`w-10 h-5 rounded-full transition-all relative ${overlaySettings.borderGlow ? 'bg-cyan-500' : 'bg-white/10'}`}
+                            >
+                              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${overlaySettings.borderGlow ? 'left-5.5' : 'left-0.5'}`} />
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
 
-                {/* Custom RTMP Section */}
-                <div className="p-6 bg-white/5 border border-white/10 rounded-2xl">
-                  <div className="flex items-center gap-3 mb-6">
-                    <Globe className="w-5 h-5 text-cyan-500" />
-                    <h3 className="font-bold">Custom RTMP Destination</h3>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Server URL</label>
-                      <div className="relative">
-                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                        <input 
-                          type="text" 
-                          placeholder="rtmps://live-api-s.facebook.com:443/rtmp/"
-                          className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
-                        />
+                    {/* Alert Box Positioning */}
+                    <div className="space-y-6 pt-8 border-t border-white/10">
+                      <div>
+                        <h3 className="font-bold text-lg">Alert Positioning</h3>
+                        <p className="text-sm text-gray-400">Choose where stream alerts appear on screen</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {[
+                          { id: 'top-left', label: 'Top Left' },
+                          { id: 'top-right', label: 'Top Right' },
+                          { id: 'center', label: 'Center' },
+                          { id: 'bottom-left', label: 'Bottom Left' },
+                          { id: 'bottom-right', label: 'Bottom Right' }
+                        ].map(pos => (
+                          <button 
+                            key={pos.id}
+                            onClick={() => setOverlaySettings(prev => ({ ...prev, alertPosition: pos.id as any }))}
+                            className={`p-4 rounded-xl border transition-all flex flex-col items-center gap-3 ${overlaySettings.alertPosition === pos.id ? 'bg-cyan-500/10 border-cyan-500 text-cyan-500' : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20'}`}
+                          >
+                            <div className="w-16 h-10 bg-black/40 rounded border border-white/10 relative overflow-hidden">
+                              <div className={`absolute w-3 h-3 bg-cyan-500 rounded-sm shadow-[0_0_8px_rgba(6,182,212,0.5)] ${
+                                pos.id === 'top-left' ? 'top-1 left-1' :
+                                pos.id === 'top-right' ? 'top-1 right-1' :
+                                pos.id === 'center' ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2' :
+                                pos.id === 'bottom-left' ? 'bottom-1 left-1' :
+                                'bottom-1 right-1'
+                              }`} />
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider">{pos.label}</span>
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Stream Key</label>
-                      <div className="relative">
-                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                        <input 
-                          type="password" 
-                          placeholder="••••••••••••••••"
-                          className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-cyan-500/50 transition-all"
-                        />
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    <div className="flex items-center justify-between p-6 bg-white/5 rounded-2xl border border-white/10">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${serverStatus.online ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                          <Globe className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-lg">Local Stream Server</h3>
+                          <p className="text-sm text-gray-400">
+                            Status: <span className={serverStatus.online ? 'text-green-500' : 'text-red-500'}>{serverStatus.online ? 'Online' : 'Offline'}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1">Active Clients</p>
+                        <p className="text-2xl font-black text-white">{serverStatus.viewers}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-5 bg-white/5 border border-white/10 rounded-2xl">
+                        <div className="flex items-center gap-3 mb-4">
+                          <Zap className="w-5 h-5 text-cyan-500" />
+                          <span className="font-bold">Real-time Sync</span>
+                        </div>
+                        <p className="text-xs text-gray-400 leading-relaxed">
+                          Your local server handles real-time chat synchronization and viewer count tracking across all connected clients.
+                        </p>
+                      </div>
+                      <div className="p-5 bg-white/5 border border-white/10 rounded-2xl">
+                        <div className="flex items-center gap-3 mb-4">
+                          <Share2 className="w-5 h-5 text-cyan-500" />
+                          <span className="font-bold">Stream Relay</span>
+                        </div>
+                        <p className="text-xs text-gray-400 leading-relaxed">
+                          The local server acts as a relay point for your video stream, allowing for lower latency and better distribution.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-6 bg-[#26262c] rounded-2xl border border-white/5">
+                      <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
+                        <Settings className="w-4 h-4 text-gray-500" />
+                        Server Configuration
+                      </h4>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-400">WebSocket URL</span>
+                          <code className="bg-black/40 px-2 py-1 rounded text-cyan-500 text-xs">
+                            {window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//{window.location.host}
+                          </code>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-400">API Endpoint</span>
+                          <code className="bg-black/40 px-2 py-1 rounded text-cyan-500 text-xs">/api/server-status</code>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-xl">
-                  <AlertCircle className="w-5 h-5 text-cyan-500 shrink-0" />
-                  <p className="text-xs text-cyan-200 leading-relaxed">
-                    Streaming to external platforms requires a server-side relay. This preview simulates the API connection and configuration flow.
-                  </p>
-                </div>
+                )}
               </div>
 
               <div className="p-6 bg-white/5 border-t border-white/10 flex justify-end gap-3">
                 <button 
                   onClick={() => setShowStreamSettings(false)}
-                  className="px-6 py-2.5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={() => setShowStreamSettings(false)}
                   className="px-8 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20"
                 >
-                  Save Settings
+                  Close
                 </button>
               </div>
             </motion.div>
@@ -605,7 +845,18 @@ export default function App() {
         <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
           
           {/* --- Video Player Section --- */}
-          <div className="relative aspect-video bg-black group">
+          <div className="relative aspect-video bg-black group overflow-hidden rounded-2xl">
+            {/* Custom Stream Border */}
+            {overlaySettings.showBorder && (
+              <div 
+                className="absolute inset-0 z-10 pointer-events-none transition-all duration-300"
+                style={{ 
+                  border: `${overlaySettings.borderWidth}px solid ${overlaySettings.borderColor}`,
+                  boxShadow: overlaySettings.borderGlow ? `inset 0 0 20px ${overlaySettings.borderColor}40, 0 0 20px ${overlaySettings.borderColor}40` : 'none'
+                }}
+              />
+            )}
+
             <video 
               ref={videoRef}
               src={isLive && streamSource === 'video' ? videoUrl : undefined}
@@ -618,7 +869,7 @@ export default function App() {
             
             {/* Placeholder when not live or video off */}
             {(!isLive || isVideoOff) && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1f1f23]">
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1f1f23] z-20">
                 <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-4">
                   <VideoOff className="w-10 h-10 text-gray-500" />
                 </div>
@@ -684,7 +935,7 @@ export default function App() {
             )}
 
             {/* --- Overlay UI --- */}
-            <div className="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between">
+            <div className="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between z-30">
               <div className="flex justify-between items-start">
                 <div className="flex flex-col gap-2">
                   {isLive && (
@@ -715,7 +966,7 @@ export default function App() {
                     className="p-2 bg-black/60 backdrop-blur-md hover:bg-black/80 rounded-lg border border-white/10 transition-colors flex items-center gap-2"
                   >
                     <Globe className="w-5 h-5 text-cyan-500" />
-                    <span className="text-xs font-bold hidden sm:inline">Destinations</span>
+                    <span className="text-xs font-bold hidden sm:inline">Settings</span>
                   </button>
                   <button className="p-2 bg-black/60 backdrop-blur-md hover:bg-black/80 rounded-lg border border-white/10 transition-colors">
                     <Settings className="w-5 h-5" />
@@ -724,7 +975,13 @@ export default function App() {
               </div>
 
               {/* Alerts Center */}
-              <div className="flex flex-col items-center gap-4 mb-12">
+              <div className={`absolute flex flex-col gap-4 pointer-events-none p-6 ${
+                overlaySettings.alertPosition === 'top-left' ? 'top-16 left-0' :
+                overlaySettings.alertPosition === 'top-right' ? 'top-16 right-0' :
+                overlaySettings.alertPosition === 'bottom-left' ? 'bottom-20 left-0' :
+                overlaySettings.alertPosition === 'bottom-right' ? 'bottom-20 right-0' :
+                'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'
+              }`}>
                 <AnimatePresence>
                   {alerts.map((alert) => (
                     <motion.div
@@ -734,18 +991,18 @@ export default function App() {
                       exit={{ opacity: 0, scale: 0.5 }}
                       className="bg-gradient-to-r from-cyan-600 to-green-500 p-px rounded-xl shadow-2xl shadow-cyan-500/20"
                     >
-                      <div className="bg-[#18181b] px-8 py-4 rounded-[11px] flex flex-col items-center text-center">
+                      <div className="bg-[#18181b] px-8 py-4 rounded-[11px] flex flex-col items-center text-center min-w-[200px]">
                         <div className="w-12 h-12 bg-cyan-500/10 rounded-full flex items-center justify-center mb-2">
                           {alert.type === 'follower' ? <Heart className="text-cyan-500 fill-current" /> : <Zap className="text-yellow-400 fill-current" />}
                         </div>
-                        <h3 className="text-xs font-bold text-cyan-500 uppercase tracking-[0.2em] mb-1">
+                        <h3 className="text-[10px] font-bold text-cyan-500 uppercase tracking-[0.2em] mb-1">
                           {alert.type === 'follower' ? 'New Follower!' : 'New Donation!'}
                         </h3>
-                        <p className="text-xl font-black text-white italic uppercase italic">
+                        <p className="text-lg font-black text-white italic uppercase">
                           {alert.user}
                         </p>
                         {alert.amount && (
-                          <p className="text-2xl font-black text-green-400 mt-1">
+                          <p className="text-xl font-black text-green-400 mt-1">
                             {alert.amount}
                           </p>
                         )}
