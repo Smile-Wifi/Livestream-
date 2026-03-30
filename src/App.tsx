@@ -26,7 +26,10 @@ import {
   Globe,
   Key,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Play,
+  Link as LinkIcon,
+  Library
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -54,6 +57,13 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   { id: '3', user: 'PixelArt', text: 'The quality is amazing today.', color: 'text-pink-400' },
 ];
 
+const VIDEO_GALLERY = [
+  { id: '1', title: 'Big Buck Bunny', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', thumb: 'https://picsum.photos/seed/bunny/200/120' },
+  { id: '2', title: 'Elephant Dream', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', thumb: 'https://picsum.photos/seed/elephant/200/120' },
+  { id: '3', title: 'Tears of Steel', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4', thumb: 'https://picsum.photos/seed/steel/200/120' },
+  { id: '4', title: 'Sintel', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4', thumb: 'https://picsum.photos/seed/sintel/200/120' },
+];
+
 export default function App() {
   const [isLive, setIsLive] = useState(false);
   const [streamSource, setStreamSource] = useState<'camera' | 'video'>('camera');
@@ -74,6 +84,8 @@ export default function App() {
   });
   const [activeDestination, setActiveDestination] = useState<'youtube' | 'facebook' | 'custom' | null>(null);
   const [showStreamSettings, setShowStreamSettings] = useState(false);
+  const [showVideoGallery, setShowVideoGallery] = useState(false);
+  const [customUrl, setCustomUrl] = useState('');
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -81,6 +93,21 @@ export default function App() {
   const streamInterval = useRef<NodeJS.Timeout | null>(null);
 
   // --- Stream Logic ---
+  useEffect(() => {
+    if (isLive && streamSource === 'camera' && videoRef.current) {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(stream => {
+          if (videoRef.current) videoRef.current.srcObject = stream;
+        })
+        .catch(err => {
+          console.error("Camera access error:", err);
+          setIsLive(false);
+        });
+    } else if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, [isLive, streamSource]);
+
   const toggleLive = async (sourceOverride?: 'camera' | 'video') => {
     const source = sourceOverride || streamSource;
     
@@ -89,46 +116,22 @@ export default function App() {
         const stream = videoRef.current?.srcObject as MediaStream;
         stream?.getTracks().forEach(track => track.stop());
       }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-        videoRef.current.src = '';
-      }
       setIsLive(false);
       setUptime(0);
       if (streamInterval.current) clearInterval(streamInterval.current);
     } else {
       setStreamSource(source);
-      try {
-        if (source === 'camera') {
-          const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: true, 
-            audio: true 
-          });
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
-        } else {
-          if (videoRef.current) {
-            videoRef.current.src = videoUrl;
-            videoRef.current.loop = true;
-            videoRef.current.play();
-          }
-        }
-        
-        setIsLive(true);
-        streamInterval.current = setInterval(() => {
-          setUptime(prev => prev + 1);
-          setViewers(prev => prev + Math.floor(Math.random() * 10) - 4);
-        }, 1000);
+      setIsLive(true);
+      
+      streamInterval.current = setInterval(() => {
+        setUptime(prev => prev + 1);
+        setViewers(prev => prev + Math.floor(Math.random() * 10) - 4);
+      }, 1000);
 
-        // Simulate a random alert shortly after going live
-        setTimeout(() => {
-          addAlert({ type: 'follower', user: 'NewFan_99' });
-        }, 5000);
-      } catch (err) {
-        console.error("Error starting stream:", err);
-        alert("Could not start stream. Please check permissions or video file.");
-      }
+      // Simulate a random alert shortly after going live
+      setTimeout(() => {
+        addAlert({ type: 'follower', user: 'NewFan_99' });
+      }, 5000);
     }
   };
 
@@ -144,6 +147,21 @@ export default function App() {
         videoRef.current.play();
       }
     }
+  };
+
+  const handleUrlStream = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customUrl.trim()) return;
+    setVideoUrl(customUrl);
+    setStreamSource('video');
+    toggleLive('video');
+  };
+
+  const selectGalleryVideo = (url: string) => {
+    setVideoUrl(url);
+    setStreamSource('video');
+    setShowVideoGallery(false);
+    toggleLive('video');
   };
 
   const addAlert = (alert: Omit<Alert, 'id'>) => {
@@ -214,6 +232,61 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0e0e10] text-gray-100 font-sans selection:bg-cyan-500/30">
+      {/* --- Video Gallery Modal --- */}
+      <AnimatePresence>
+        {showVideoGallery && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowVideoGallery(false)}
+              className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200]"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl bg-[#18181b] border border-white/10 rounded-3xl z-[201] shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-cyan-500/10 rounded-lg">
+                    <Library className="w-5 h-5 text-cyan-500" />
+                  </div>
+                  <h2 className="text-xl font-bold">Video Gallery</h2>
+                </div>
+                <button onClick={() => setShowVideoGallery(false)} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {VIDEO_GALLERY.map((video) => (
+                    <div 
+                      key={video.id}
+                      onClick={() => selectGalleryVideo(video.url)}
+                      className="group relative aspect-video rounded-xl overflow-hidden cursor-pointer border border-white/5 hover:border-cyan-500/50 transition-all"
+                    >
+                      <img src={video.thumb} alt={video.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-4">
+                        <p className="font-bold text-white group-hover:text-cyan-500 transition-colors">{video.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Play className="w-3 h-3 text-cyan-500 fill-current" />
+                          <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Preview</span>
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 bg-cyan-500/0 group-hover:bg-cyan-500/10 transition-colors" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* --- Stream Settings Modal --- */}
       <AnimatePresence>
         {showStreamSettings && (
@@ -535,9 +608,11 @@ export default function App() {
           <div className="relative aspect-video bg-black group">
             <video 
               ref={videoRef}
+              src={isLive && streamSource === 'video' ? videoUrl : undefined}
               autoPlay 
               playsInline 
               muted={isMuted}
+              loop={isLive && streamSource === 'video'}
               className={`w-full h-full object-cover ${isVideoOff ? 'hidden' : ''}`}
             />
             
@@ -551,30 +626,51 @@ export default function App() {
                   {isLive ? 'Stream is hidden' : 'Stream is currently offline'}
                 </p>
                 {!isLive && (
-                  <div className="flex flex-col gap-3 mt-6">
+                  <div className="flex flex-col gap-4 mt-6 w-full max-w-sm px-4">
                     <button 
                       onClick={() => toggleLive('camera')}
-                      className="px-8 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-lg transition-all transform hover:scale-105 flex items-center gap-2"
+                      className="w-full px-8 py-3 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20"
                     >
-                      <VideoIcon className="w-4 h-4" />
+                      <VideoIcon className="w-5 h-5" />
                       GO LIVE WITH CAMERA
                     </button>
-                    <div className="flex gap-2">
+                    
+                    <div className="grid grid-cols-2 gap-2">
                       <button 
-                        onClick={() => toggleLive('video')}
-                        className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg transition-all border border-white/10 flex items-center justify-center gap-2"
+                        onClick={() => setShowVideoGallery(true)}
+                        className="px-4 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2"
                       >
-                        <Zap className="w-4 h-4 text-cyan-500" />
-                        STREAM MP4
+                        <Library className="w-4 h-4 text-cyan-500" />
+                        GALLERY
                       </button>
                       <button 
                         onClick={() => fileInputRef.current?.click()}
-                        className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg transition-all border border-white/10"
-                        title="Upload Custom MP4"
+                        className="px-4 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2"
                       >
-                        <Share2 className="w-4 h-4 rotate-90" />
+                        <Share2 className="w-4 h-4 text-cyan-500 rotate-90" />
+                        UPLOAD
                       </button>
                     </div>
+
+                    <form onSubmit={handleUrlStream} className="relative group">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-white/5 group-focus-within:bg-cyan-500/10 transition-colors">
+                        <LinkIcon className="w-4 h-4 text-gray-500 group-focus-within:text-cyan-500 transition-colors" />
+                      </div>
+                      <input 
+                        type="url" 
+                        placeholder="Paste MP4 URL to stream..."
+                        value={customUrl}
+                        onChange={(e) => setCustomUrl(e.target.value)}
+                        className="w-full bg-[#26262c] border border-white/10 rounded-xl py-3.5 pl-12 pr-12 text-sm outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-500"
+                      />
+                      <button 
+                        type="submit"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-cyan-500 hover:bg-cyan-400 text-black rounded-lg transition-all"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                      </button>
+                    </form>
+
                     <input 
                       type="file" 
                       ref={fileInputRef} 
