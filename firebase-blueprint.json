@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user's unique ID" },
+        "displayName": { "type": "string", "description": "The user's display name" },
+        "email": { "type": "string", "description": "The user's email address" },
+        "photoURL": { "type": "string", "description": "The user's profile photo URL" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "The user's role" }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "StreamState": {
+      "title": "StreamState",
+      "description": "The current state of the media stream",
+      "type": "object",
+      "properties": {
+        "mediaUrl": { "type": "string", "description": "URL of the media being played" },
+        "mediaType": { "type": "string", "enum": ["video", "audio"], "description": "Type of media (video or audio)" },
+        "isPlaying": { "type": "boolean", "description": "Whether the media is currently playing" },
+        "currentTime": { "type": "number", "description": "The current playback time in seconds" },
+        "lastUpdated": { "type": "number", "description": "Timestamp of the last update" },
+        "updatedBy": { "type": "string", "description": "UID of the user who last updated the state" }
+      },
+      "required": ["mediaUrl", "mediaType", "isPlaying", "currentTime", "lastUpdated"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile documents"
+    },
+    "/stream_state/current": {
+      "schema": "StreamState",
+      "description": "The current global stream state"
+    }
+  }
+}

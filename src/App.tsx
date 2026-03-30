@@ -29,9 +29,27 @@ import {
   AlertCircle,
   Play,
   Link as LinkIcon,
-  Library
+  Library,
+  Music,
+  Film
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { auth, db, googleProvider, facebookProvider } from './firebase';
+import { 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged, 
+  User as FirebaseUser 
+} from 'firebase/auth';
+import { 
+  doc, 
+  setDoc, 
+  getDoc, 
+  onSnapshot, 
+  updateDoc, 
+  serverTimestamp,
+  getDocFromServer
+} from 'firebase/firestore';
 
 // --- Types ---
 interface ChatMessage {
@@ -58,10 +76,17 @@ const INITIAL_MESSAGES: ChatMessage[] = [
 ];
 
 const VIDEO_GALLERY = [
-  { id: '1', title: 'Big Buck Bunny', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', thumb: 'https://picsum.photos/seed/bunny/200/120' },
-  { id: '2', title: 'Elephant Dream', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', thumb: 'https://picsum.photos/seed/elephant/200/120' },
-  { id: '3', title: 'Tears of Steel', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4', thumb: 'https://picsum.photos/seed/steel/200/120' },
-  { id: '4', title: 'Sintel', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4', thumb: 'https://picsum.photos/seed/sintel/200/120' },
+  { id: '1', title: 'Big Buck Bunny', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', thumb: 'https://picsum.photos/seed/bunny/200/120', type: 'video' as const },
+  { id: '2', title: 'Elephant Dream', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', thumb: 'https://picsum.photos/seed/elephant/200/120', type: 'video' as const },
+  { id: '3', title: 'Tears of Steel', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4', thumb: 'https://picsum.photos/seed/steel/200/120', type: 'video' as const },
+  { id: '4', title: 'Sintel', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4', thumb: 'https://picsum.photos/seed/sintel/200/120', type: 'video' as const },
+];
+
+const MEDIA_GALLERY = [
+  ...VIDEO_GALLERY,
+  { id: 'm1', title: 'Synthwave Dreams', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', thumb: 'https://picsum.photos/seed/music1/200/120', type: 'audio' as const },
+  { id: 'm2', title: 'Cyberpunk Beat', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', thumb: 'https://picsum.photos/seed/music2/200/120', type: 'audio' as const },
+  { id: 'm3', title: 'Ambient Chill', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', thumb: 'https://picsum.photos/seed/music3/200/120', type: 'audio' as const },
 ];
 
 export default function App() {
@@ -76,7 +101,10 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [user, setUser] = useState<{ name: string; email: string; avatar: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; email: string; avatar: string; uid: string; role: string } | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [mediaType, setMediaType] = useState<'video' | 'audio'>('video');
+  const [isHost, setIsHost] = useState(false); // For demo, first user or explicit toggle
   const [destinations, setDestinations] = useState({
     youtube: { connected: false, name: '' },
     facebook: { connected: false, name: '' },
@@ -84,7 +112,7 @@ export default function App() {
   });
   const [activeDestination, setActiveDestination] = useState<'youtube' | 'facebook' | 'custom' | null>(null);
   const [showStreamSettings, setShowStreamSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'destinations' | 'overlays' | 'server'>('destinations');
+  const [settingsTab, setSettingsTab] = useState<'destinations' | 'overlays' | 'server' | 'media'>('destinations');
   const [overlaySettings, setOverlaySettings] = useState({
     borderColor: '#06b6d4',
     borderWidth: 2,
@@ -94,6 +122,121 @@ export default function App() {
   });
   const [serverStatus, setServerStatus] = useState<{ online: boolean; viewers: number; uptime: number }>({ online: false, viewers: 0, uptime: 0 });
   const socketRef = useRef<WebSocket | null>(null);
+
+  // --- Auth Logic ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setUser({
+            uid: firebaseUser.uid,
+            name: userData.displayName || firebaseUser.displayName || 'Anonymous',
+            email: firebaseUser.email || '',
+            avatar: userData.photoURL || firebaseUser.photoURL || `https://picsum.photos/seed/${firebaseUser.uid}/200`,
+            role: userData.role || 'user'
+          });
+        } else {
+          // Create user profile if it doesn't exist
+          const newUser = {
+            uid: firebaseUser.uid,
+            displayName: firebaseUser.displayName || 'Anonymous',
+            email: firebaseUser.email || '',
+            photoURL: firebaseUser.photoURL || `https://picsum.photos/seed/${firebaseUser.uid}/200`,
+            role: 'user'
+          };
+          await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+          setUser({
+            ...newUser,
+            name: newUser.displayName,
+            avatar: newUser.photoURL
+          });
+        }
+        // For demo purposes, let's say the first logged in user is the host
+        // In a real app, this would be based on permissions or room ownership
+        setIsHost(true); 
+      } else {
+        setUser(null);
+        setIsHost(false);
+      }
+      setIsAuthReady(true);
+    });
+
+    // Test connection
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration.");
+        }
+      }
+    };
+    testConnection();
+
+    return () => unsubscribe();
+  }, []);
+
+  // --- Stream Synchronization Logic ---
+  useEffect(() => {
+    if (!isAuthReady) return;
+
+    const unsubscribe = onSnapshot(doc(db, 'stream_state', 'current'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        
+        // Only sync if we are NOT the host (viewers follow host)
+        if (!isHost) {
+          if (data.mediaUrl !== videoUrl) {
+            setVideoUrl(data.mediaUrl);
+            setMediaType(data.mediaType);
+          }
+          
+          if (videoRef.current) {
+            const timeDiff = Math.abs(videoRef.current.currentTime - data.currentTime);
+            // Sync if time difference is more than 2 seconds
+            if (timeDiff > 2) {
+              videoRef.current.currentTime = data.currentTime;
+            }
+            
+            if (data.isPlaying && videoRef.current.paused) {
+              videoRef.current.play().catch(() => {});
+            } else if (!data.isPlaying && !videoRef.current.paused) {
+              videoRef.current.pause();
+            }
+          }
+        }
+      }
+    }, (error) => {
+      console.error("Firestore sync error:", error);
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, isHost, videoUrl]);
+
+  // Update global state if we are the host
+  const updateGlobalStreamState = async (updates: any) => {
+    if (!isHost || !user) return;
+    try {
+      await updateDoc(doc(db, 'stream_state', 'current'), {
+        ...updates,
+        lastUpdated: Date.now(),
+        updatedBy: user.uid
+      });
+    } catch (error) {
+      // If doc doesn't exist, create it
+      await setDoc(doc(db, 'stream_state', 'current'), {
+        mediaUrl: videoUrl,
+        mediaType: mediaType,
+        isPlaying: !videoRef.current?.paused,
+        currentTime: videoRef.current?.currentTime || 0,
+        lastUpdated: Date.now(),
+        updatedBy: user.uid,
+        ...updates
+      });
+    }
+  };
 
   // --- WebSocket Logic ---
   useEffect(() => {
@@ -206,11 +349,21 @@ export default function App() {
     toggleLive('video');
   };
 
-  const selectGalleryVideo = (url: string) => {
+  const selectGalleryVideo = (url: string, type: 'video' | 'audio' = 'video') => {
     setVideoUrl(url);
+    setMediaType(type);
     setStreamSource('video');
     setShowVideoGallery(false);
     toggleLive('video');
+    
+    if (isHost) {
+      updateGlobalStreamState({
+        mediaUrl: url,
+        mediaType: type,
+        isPlaying: true,
+        currentTime: 0
+      });
+    }
   };
 
   const addAlert = (alert: Omit<Alert, 'id'>) => {
@@ -256,19 +409,24 @@ export default function App() {
     return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleLogin = (provider: 'google' | 'facebook') => {
-    // Simulate login
-    setUser({
-      name: provider === 'google' ? 'Google User' : 'Facebook User',
-      email: provider === 'google' ? 'user@gmail.com' : 'user@facebook.com',
-      avatar: `https://picsum.photos/seed/${provider}/200`
-    });
-    setIsSidebarOpen(false);
+  const handleLogin = async (providerName: 'google' | 'facebook') => {
+    try {
+      const provider = providerName === 'google' ? googleProvider : facebookProvider;
+      await signInWithPopup(auth, provider);
+      setIsSidebarOpen(false);
+    } catch (error) {
+      console.error("Login error:", error);
+      addAlert({ type: 'follower', user: 'Login failed. Please try again.' });
+    }
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    setIsSidebarOpen(false);
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setIsSidebarOpen(false);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   const connectDestination = (platform: 'youtube' | 'facebook') => {
@@ -392,6 +550,12 @@ export default function App() {
                   className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${settingsTab === 'server' ? 'border-cyan-500 text-cyan-500 bg-cyan-500/5' : 'border-transparent text-gray-400 hover:text-white'}`}
                 >
                   LOCAL SERVER
+                </button>
+                <button 
+                  onClick={() => setSettingsTab('media')}
+                  className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${settingsTab === 'media' ? 'border-cyan-500 text-cyan-500 bg-cyan-500/5' : 'border-transparent text-gray-400 hover:text-white'}`}
+                >
+                  MEDIA
                 </button>
               </div>
 
@@ -864,8 +1028,45 @@ export default function App() {
               playsInline 
               muted={isMuted}
               loop={isLive && streamSource === 'video'}
-              className={`w-full h-full object-cover ${isVideoOff ? 'hidden' : ''}`}
+              className={`w-full h-full object-cover ${isVideoOff || mediaType === 'audio' ? 'hidden' : ''}`}
+              onPlay={() => isHost && updateGlobalStreamState({ isPlaying: true, currentTime: videoRef.current?.currentTime || 0 })}
+              onPause={() => isHost && updateGlobalStreamState({ isPlaying: false, currentTime: videoRef.current?.currentTime || 0 })}
+              onTimeUpdate={() => {
+                if (isHost && videoRef.current && Math.floor(videoRef.current.currentTime) % 5 === 0) {
+                  updateGlobalStreamState({ currentTime: videoRef.current.currentTime });
+                }
+              }}
             />
+            
+            {/* Audio Placeholder */}
+            {isLive && mediaType === 'audio' && !isVideoOff && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-cyan-500/20 z-10">
+                <motion.div 
+                  animate={{ 
+                    scale: [1, 1.1, 1],
+                    rotate: [0, 5, -5, 0]
+                  }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                  className="w-32 h-32 bg-white/5 rounded-full flex items-center justify-center mb-6 backdrop-blur-xl border border-white/10 shadow-2xl"
+                >
+                  <Music className="w-16 h-16 text-pink-500 drop-shadow-[0_0_15px_rgba(236,72,153,0.5)]" />
+                </motion.div>
+                <h3 className="text-2xl font-bold text-white mb-2">Now Playing</h3>
+                <p className="text-gray-400 font-medium">Audio Stream Active</p>
+                
+                {/* Visualizer simulation */}
+                <div className="flex items-end gap-1 mt-8 h-12">
+                  {[...Array(12)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ height: [10, Math.random() * 40 + 10, 10] }}
+                      transition={{ duration: 0.5 + Math.random(), repeat: Infinity }}
+                      className="w-1.5 bg-cyan-500 rounded-full"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
             
             {/* Placeholder when not live or video off */}
             {(!isLive || isVideoOff) && (
