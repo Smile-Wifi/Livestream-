@@ -22,10 +22,12 @@
         "mediaType": { "type": "string", "enum": ["video", "audio"], "description": "Type of media (video or audio)" },
         "isPlaying": { "type": "boolean", "description": "Whether the media is currently playing" },
         "currentTime": { "type": "number", "description": "The current playback time in seconds" },
+        "isLive": { "type": "boolean", "description": "Whether the stream is currently live" },
         "lastUpdated": { "type": "number", "description": "Timestamp of the last update" },
-        "updatedBy": { "type": "string", "description": "UID of the user who last updated the state" }
+        "updatedBy": { "type": "string", "description": "UID of the user who last updated the state" },
+        "hostId": { "type": "string", "description": "UID of the current stream host" }
       },
-      "required": ["mediaUrl", "mediaType", "isPlaying", "currentTime", "lastUpdated"]
+      "required": ["mediaUrl", "mediaType", "isPlaying", "currentTime", "lastUpdated", "hostId"]
     }
   },
   "firestore": {

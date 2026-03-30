@@ -53,13 +53,15 @@ service cloud.firestore {
     }
 
     function isValidStreamState(data) {
-      return data.keys().hasAll(['mediaUrl', 'mediaType', 'isPlaying', 'currentTime', 'lastUpdated', 'updatedBy']) &&
+      return data.keys().hasAll(['mediaUrl', 'mediaType', 'isPlaying', 'currentTime', 'lastUpdated', 'updatedBy', 'hostId', 'isLive']) &&
              data.mediaUrl is string && data.mediaUrl.size() > 0 && data.mediaUrl.size() < 2000 &&
              data.mediaType in ['video', 'audio'] &&
              data.isPlaying is bool &&
              data.currentTime is number &&
+             data.isLive is bool &&
              data.lastUpdated is number &&
-             data.updatedBy is string && data.updatedBy == request.auth.uid;
+             data.updatedBy is string && data.updatedBy == request.auth.uid &&
+             data.hostId is string;
     }
 
     // ===============================================================
@@ -67,7 +69,7 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
       allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
       allow delete: if isAdmin();
@@ -75,11 +77,14 @@ service cloud.firestore {
 
     match /stream_state/{docId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isValidStreamState(request.resource.data);
+      // Allow update if user is the current host or an admin
+      allow update: if isAuthenticated() && (isAdmin() || request.auth.uid == resource.data.hostId) && isValidStreamState(request.resource.data);
+      // Allow create if user is an admin or if there is no current host (first person to start)
+      allow create: if isAuthenticated() && (isAdmin() || !exists(/databases/$(database)/documents/stream_state/current)) && isValidStreamState(request.resource.data);
     }
     
     match /test/connection {
-      allow read: if true; // Allow connection test
+      allow read: if isAuthenticated(); // Require auth for connection test
     }
   }
 }

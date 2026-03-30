@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Component } from 'react';
 import { 
   Video, 
   MessageSquare, 
@@ -35,7 +35,7 @@ import {
   Film
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, db, googleProvider, facebookProvider } from './firebase';
+import { auth, db, googleProvider, facebookProvider, handleFirestoreError, OperationType } from './firebase';
 import { 
   signInWithPopup, 
   signOut, 
@@ -51,6 +51,56 @@ import {
   serverTimestamp,
   getDocFromServer
 } from 'firebase/firestore';
+
+// --- Error Boundary ---
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      let errorMessage = "Something went wrong.";
+      try {
+        const parsed = JSON.parse(this.state.error?.message || "");
+        if (parsed.error) errorMessage = `Firestore Error: ${parsed.error}`;
+      } catch (e) {
+        errorMessage = this.state.error?.message || errorMessage;
+      }
+
+      return (
+        <div className="min-h-screen bg-[#0e0e10] flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-[#18181b] border border-white/10 rounded-3xl p-8 text-center shadow-2xl">
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertCircle className="w-8 h-8 text-red-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-4">Application Error</h2>
+            <p className="text-gray-400 mb-8 leading-relaxed">
+              {errorMessage}
+            </p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20"
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 // --- Types ---
 interface ChatMessage {
@@ -91,6 +141,14 @@ const MEDIA_GALLERY = [
 ];
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const [isLive, setIsLive] = useState(false);
   const [streamSource, setStreamSource] = useState<'camera' | 'video'>('camera');
   const [videoUrl, setVideoUrl] = useState<string>('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
@@ -128,35 +186,36 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setUser({
-            uid: firebaseUser.uid,
-            name: userData.displayName || firebaseUser.displayName || 'Anonymous',
-            email: firebaseUser.email || '',
-            avatar: userData.photoURL || firebaseUser.photoURL || `https://picsum.photos/seed/${firebaseUser.uid}/200`,
-            role: userData.role || 'user'
-          });
-        } else {
-          // Create user profile if it doesn't exist
-          const newUser = {
-            uid: firebaseUser.uid,
-            displayName: firebaseUser.displayName || 'Anonymous',
-            email: firebaseUser.email || '',
-            photoURL: firebaseUser.photoURL || `https://picsum.photos/seed/${firebaseUser.uid}/200`,
-            role: 'user'
-          };
-          await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
-          setUser({
-            ...newUser,
-            name: newUser.displayName,
-            avatar: newUser.photoURL
-          });
+        try {
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setUser({
+              uid: firebaseUser.uid,
+              name: userData.displayName || firebaseUser.displayName || 'Anonymous',
+              email: firebaseUser.email || '',
+              avatar: userData.photoURL || firebaseUser.photoURL || `https://picsum.photos/seed/${firebaseUser.uid}/200`,
+              role: userData.role || 'user'
+            });
+          } else {
+            // Create user profile if it doesn't exist
+            const newUser = {
+              uid: firebaseUser.uid,
+              displayName: firebaseUser.displayName || 'Anonymous',
+              email: firebaseUser.email || '',
+              photoURL: firebaseUser.photoURL || `https://picsum.photos/seed/${firebaseUser.uid}/200`,
+              role: 'user'
+            };
+            await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+            setUser({
+              ...newUser,
+              name: newUser.displayName,
+              avatar: newUser.photoURL
+            });
+          }
+        } catch (error) {
+          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
         }
-        // For demo purposes, let's say the first logged in user is the host
-        // In a real app, this would be based on permissions or room ownership
-        setIsHost(true); 
       } else {
         setUser(null);
         setIsHost(false);
@@ -187,8 +246,17 @@ export default function App() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         
+        // Update isHost based on Firestore data
+        if (user && data.hostId === user.uid) {
+          setIsHost(true);
+        } else {
+          setIsHost(false);
+        }
+
         // Only sync if we are NOT the host (viewers follow host)
-        if (!isHost) {
+        if (user && data.hostId !== user.uid) {
+          if (data.isLive !== undefined) setIsLive(data.isLive);
+          
           if (data.mediaUrl !== videoUrl) {
             setVideoUrl(data.mediaUrl);
             setMediaType(data.mediaType);
@@ -208,13 +276,16 @@ export default function App() {
             }
           }
         }
+      } else if (user) {
+        // If no stream state exists, current user can be host
+        setIsHost(true);
       }
     }, (error) => {
-      console.error("Firestore sync error:", error);
+      handleFirestoreError(error, OperationType.GET, 'stream_state/current');
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, isHost, videoUrl]);
+  }, [isAuthReady, user, videoUrl]);
 
   // Update global state if we are the host
   const updateGlobalStreamState = async (updates: any) => {
@@ -223,19 +294,25 @@ export default function App() {
       await updateDoc(doc(db, 'stream_state', 'current'), {
         ...updates,
         lastUpdated: Date.now(),
-        updatedBy: user.uid
+        updatedBy: user.uid,
+        hostId: user.uid
       });
     } catch (error) {
-      // If doc doesn't exist, create it
-      await setDoc(doc(db, 'stream_state', 'current'), {
-        mediaUrl: videoUrl,
-        mediaType: mediaType,
-        isPlaying: !videoRef.current?.paused,
-        currentTime: videoRef.current?.currentTime || 0,
-        lastUpdated: Date.now(),
-        updatedBy: user.uid,
-        ...updates
-      });
+      try {
+        // If doc doesn't exist, create it
+        await setDoc(doc(db, 'stream_state', 'current'), {
+          mediaUrl: videoUrl,
+          mediaType: mediaType,
+          isPlaying: !videoRef.current?.paused,
+          currentTime: videoRef.current?.currentTime || 0,
+          lastUpdated: Date.now(),
+          updatedBy: user.uid,
+          hostId: user.uid,
+          ...updates
+        });
+      } catch (innerError) {
+        handleFirestoreError(innerError, OperationType.WRITE, 'stream_state/current');
+      }
     }
   };
 
@@ -312,6 +389,10 @@ export default function App() {
       setIsLive(false);
       setUptime(0);
       if (streamInterval.current) clearInterval(streamInterval.current);
+      
+      if (isHost) {
+        updateGlobalStreamState({ isLive: false, isPlaying: false });
+      }
     } else {
       setStreamSource(source);
       setIsLive(true);
@@ -325,6 +406,16 @@ export default function App() {
       setTimeout(() => {
         addAlert({ type: 'follower', user: 'NewFan_99' });
       }, 5000);
+
+      if (isHost) {
+        updateGlobalStreamState({ 
+          isLive: true, 
+          isPlaying: true, 
+          mediaUrl: videoUrl, 
+          mediaType: mediaType,
+          currentTime: videoRef.current?.currentTime || 0
+        });
+      }
     }
   };
 
@@ -968,6 +1059,36 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="space-y-8">
+                    {/* Live Now Button for Guests */}
+                    {isLive && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="p-6 rounded-3xl bg-red-500/10 border border-red-500/20 text-center relative overflow-hidden group"
+                      >
+                        <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-center gap-2 mb-3">
+                            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                            <span className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em]">Live Now</span>
+                          </div>
+                          <h4 className="text-lg font-bold text-white mb-4 leading-tight">StreamFlow is Live!</h4>
+                          <button 
+                            onClick={() => {
+                              setIsSidebarOpen(false);
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="w-full py-3 bg-red-500 hover:bg-red-400 text-white font-black rounded-xl transition-all shadow-lg shadow-red-500/20 text-xs uppercase tracking-widest"
+                          >
+                            Watch Stream
+                          </button>
+                        </div>
+                        <div className="absolute -bottom-4 -right-4 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                          <Zap className="w-24 h-24 text-red-500 fill-current" />
+                        </div>
+                      </motion.div>
+                    )}
+
                     <div className="text-center">
                       <h3 className="text-xl font-bold text-white mb-2">Join StreamFlow</h3>
                       <p className="text-sm text-gray-400">Connect with your favorite creators and start your own journey.</p>
@@ -1333,7 +1454,7 @@ export default function App() {
                 <motion.button 
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={toggleLive}
+                  onClick={() => toggleLive()}
                   className={`px-8 py-3 rounded-full font-bold transition-all shadow-xl ${isLive ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/20' : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-cyan-500/20'}`}
                 >
                   {isLive ? 'STOP STREAM' : 'START STREAM'}
