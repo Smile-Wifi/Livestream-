@@ -160,7 +160,7 @@ function AppContent() {
   const [viewers, setViewers] = useState(1242);
   const [uptime, setUptime] = useState(0);
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [user, setUser] = useState<{ name: string; email: string; avatar: string; uid: string; role: string } | null>(null);
@@ -276,6 +276,7 @@ function AppContent() {
         // Only sync if we are NOT the host (viewers follow host)
         if (user && data.hostId !== user.uid) {
           if (data.isLive !== undefined) setIsLive(data.isLive);
+          if (data.streamSource !== undefined) setStreamSource(data.streamSource);
           
           if (data.mediaUrl !== videoUrl) {
             setVideoUrl(data.mediaUrl);
@@ -318,6 +319,7 @@ function AppContent() {
       await updateDoc(doc(db, 'stream_state', 'current'), {
         ...updates,
         isLive: updates.isLive !== undefined ? updates.isLive : isLive,
+        streamSource: updates.streamSource !== undefined ? updates.streamSource : streamSource,
         lastUpdated: Date.now(),
         updatedBy: user.uid,
         hostId: user.uid
@@ -328,6 +330,7 @@ function AppContent() {
         await setDoc(doc(db, 'stream_state', 'current'), {
           mediaUrl: videoUrl,
           mediaType: mediaType,
+          streamSource: streamSource,
           isPlaying: !videoRef.current?.paused,
           currentTime: videoRef.current?.currentTime || 0,
           isLive: updates.isLive !== undefined ? updates.isLive : isLive,
@@ -439,6 +442,7 @@ function AppContent() {
           isPlaying: true, 
           mediaUrl: videoUrl, 
           mediaType: mediaType,
+          streamSource: source,
           currentTime: videoRef.current?.currentTime || 0
         });
       }
@@ -452,9 +456,18 @@ function AppContent() {
       setVideoUrl(url);
       setStreamSource('video');
       // If already live and source is video, update the source
-      if (isLive && streamSource === 'video' && videoRef.current) {
+      if (isLive && videoRef.current) {
         videoRef.current.src = url;
-        videoRef.current.play();
+        videoRef.current.play().catch(() => {});
+        
+        if (isHost || isAdmin) {
+          updateGlobalStreamState({
+            mediaUrl: url,
+            streamSource: 'video',
+            isPlaying: true,
+            currentTime: 0
+          });
+        }
       }
     }
   };
@@ -478,6 +491,7 @@ function AppContent() {
       updateGlobalStreamState({
         mediaUrl: url,
         mediaType: type,
+        streamSource: 'video',
         isPlaying: true,
         currentTime: 0
       });
@@ -545,6 +559,21 @@ function AppContent() {
     } catch (error) {
       console.error("Logout error:", error);
     }
+  };
+
+  const [isConnectingRtmp, setIsConnectingRtmp] = useState(false);
+
+  const connectCustomRtmp = () => {
+    if (!destinations.custom.url || !destinations.custom.key) return;
+    setIsConnectingRtmp(true);
+    setTimeout(() => {
+      setDestinations(prev => ({
+        ...prev,
+        custom: { ...prev.custom, connected: true }
+      }));
+      setActiveDestination('custom');
+      setIsConnectingRtmp(false);
+    }, 1500);
   };
 
   const connectDestination = (platform: 'youtube' | 'facebook') => {
@@ -954,6 +983,36 @@ function AppContent() {
                             </button>
                           </div>
                         </div>
+                        
+                        <div className="pt-2">
+                          {destinations.custom.connected ? (
+                            <button 
+                              onClick={() => disconnectDestination('custom')}
+                              className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl text-sm font-bold transition-all border border-red-500/20 flex items-center justify-center gap-2"
+                            >
+                              <X className="w-4 h-4" />
+                              Disconnect Custom RTMP
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={connectCustomRtmp}
+                              disabled={isConnectingRtmp || !destinations.custom.url || !destinations.custom.key}
+                              className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${isConnectingRtmp || !destinations.custom.url || !destinations.custom.key ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-lg shadow-cyan-500/20'}`}
+                            >
+                              {isConnectingRtmp ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                                  Connecting...
+                                </>
+                              ) : (
+                                <>
+                                  <ExternalLink className="w-4 h-4" />
+                                  Connect Custom RTMP
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -1052,7 +1111,12 @@ function AppContent() {
                             </div>
                           </div>
                           <button 
-                            onClick={() => setStreamSource('camera')}
+                            onClick={() => {
+                              setStreamSource('camera');
+                              if (isLive && (isHost || isAdmin)) {
+                                updateGlobalStreamState({ streamSource: 'camera' });
+                              }
+                            }}
                             className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${streamSource === 'camera' ? 'bg-cyan-500 text-black' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
                           >
                             {streamSource === 'camera' ? 'ACTIVE' : 'SELECT'}
@@ -1069,7 +1133,12 @@ function AppContent() {
                             </div>
                           </div>
                           <button 
-                            onClick={() => setStreamSource('video')}
+                            onClick={() => {
+                              setStreamSource('video');
+                              if (isLive && (isHost || isAdmin)) {
+                                updateGlobalStreamState({ streamSource: 'video' });
+                              }
+                            }}
                             className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${streamSource === 'video' ? 'bg-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
                           >
                             {streamSource === 'video' ? 'ACTIVE' : 'SELECT'}
@@ -1433,6 +1502,19 @@ function AppContent() {
               Live
             </motion.button>
           )}
+          {isLive && (isHost || isAdmin) && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => toggleLive()}
+              className="hidden sm:flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-400 text-white text-xs font-black rounded-xl transition-all shadow-xl shadow-red-500/20 uppercase tracking-widest"
+            >
+              <VideoOff className="w-4 h-4" />
+              Stop Live
+            </motion.button>
+          )}
           {user && !isLive && (
             <motion.button
               initial={{ opacity: 0, x: 20 }}
@@ -1535,6 +1617,23 @@ function AppContent() {
                 }
               }}
             />
+
+            {/* Play Button Overlay for Viewers (Autoplay bypass) */}
+            {isLive && !isHost && videoRef.current?.paused && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-30 backdrop-blur-sm">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    videoRef.current?.play().catch(err => console.error("Play failed:", err));
+                    setIsMuted(false);
+                  }}
+                  className="w-20 h-20 bg-cyan-500 rounded-full flex items-center justify-center shadow-2xl shadow-cyan-500/40"
+                >
+                  <Play className="w-10 h-10 text-black fill-current ml-1" />
+                </motion.button>
+              </div>
+            )}
             
             {/* Audio Placeholder */}
             {isLive && mediaType === 'audio' && !isVideoOff && (

@@ -13,7 +13,8 @@ async function startServer() {
   const server = createServer(app);
   const wss = new WebSocketServer({ server });
 
-  const PORT = 3000;
+  // Use process.env.PORT for Render/Production compatibility, default to 3000 for AIS
+  const PORT = process.env.PORT || 3000;
 
   // Store connected clients
   const clients = new Set<WebSocket>();

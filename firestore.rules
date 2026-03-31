@@ -53,9 +53,10 @@ service cloud.firestore {
     }
 
     function isValidStreamState(data) {
-      return data.keys().hasAll(['mediaUrl', 'mediaType', 'isPlaying', 'currentTime', 'lastUpdated', 'updatedBy', 'hostId', 'isLive']) &&
+      return data.keys().hasAll(['mediaUrl', 'mediaType', 'isPlaying', 'currentTime', 'lastUpdated', 'updatedBy', 'hostId', 'isLive', 'streamSource']) &&
              data.mediaUrl is string && data.mediaUrl.size() > 0 && data.mediaUrl.size() < 2000 &&
              data.mediaType in ['video', 'audio'] &&
+             data.streamSource in ['camera', 'video'] &&
              data.isPlaying is bool &&
              data.currentTime is number &&
              data.isLive is bool &&
@@ -76,7 +77,7 @@ service cloud.firestore {
     }
 
     match /stream_state/{docId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       // Allow update if user is the current host or an admin
       allow update: if isAuthenticated() && (isAdmin() || request.auth.uid == resource.data.hostId) && isValidStreamState(request.resource.data);
       // Allow create if user is an admin or if there is no current host (first person to start)
@@ -84,7 +85,7 @@ service cloud.firestore {
     }
     
     match /test/connection {
-      allow read: if isAuthenticated(); // Require auth for connection test
+      allow read: if true; // Allow public read for connection test
     }
   }
 }
